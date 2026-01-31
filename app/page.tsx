@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Menu } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 // Import Components
 import Sidebar from './components/Sidebar';
@@ -11,7 +12,7 @@ import AITutorContent from './components/AITutorContent';
 import CourseContent from './components/CourseContent';
 import ScheduleContent from './components/ScheduleContent';
 import PomodoroContent from './components/PomodoroContent';
-import CertificatesContent from './components/CertificatesContent';
+import PdfTutorContent from './components/pdf_tutorContent';
 import QuizContent from './components/QuizContent';
 
 
@@ -23,8 +24,16 @@ export default function DashboardPage() {
   // In a real app, this user data would come from a Context or Database
   const [user] = useState({ name: 'Admin', level: 'Intermediate', points: 1250 });
 
-  const handleLogout = () => {
-    router.push('/login');
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      if (typeof document !== 'undefined') {
+        document.cookie = 'ai_user_name=; path=/; max-age=0';
+        document.cookie = 'ai_user_email=; path=/; max-age=0';
+      }
+      router.push('/login');
+    }
   };
 
   return (
@@ -59,13 +68,8 @@ export default function DashboardPage() {
               <Menu size={24} />
             </button>
             <h2 className="text-lg md:text-xl font-bold text-slate-800 capitalize tracking-tight">
-              {view.replace('-', ' ')}
+              {view.replace(/[-_]/g, ' ')}
             </h2>
-          </div>
-          <div className="flex items-center gap-2">
-             <span className="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs md:text-sm font-bold shadow-lg shadow-blue-200">
-               {user.points} XP
-             </span>
           </div>
         </header>
 
@@ -75,7 +79,7 @@ export default function DashboardPage() {
           {view === 'courses' && <CourseContent />}
           {view === 'schedule' && <ScheduleContent />}
           {view === 'pomodoro' && <PomodoroContent />}
-          {view === 'certificates' && <CertificatesContent />}
+          {view === 'pdf_tutor' && <PdfTutorContent />}
           {view === 'quiz' && <QuizContent />}
 
         </div>

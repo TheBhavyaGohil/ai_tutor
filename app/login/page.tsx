@@ -2,31 +2,46 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Brain, Mail, Lock } from 'lucide-react';
+import { Brain, Mail, Lock, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient'; 
 
 export default function LoginPage() {
   const router = useRouter();
   
-  // 1. Create state to store input values
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // 2. The Login Logic
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); // Reset error message
+    setError('');
+    setLoading(true);
 
-    // Hardcoded Admin Credentials
-    const ADMIN_EMAIL = "admin@edugenie.com";
-    const ADMIN_PASSWORD = "admin";
+    try {
+      // 1. Authenticate with Supabase
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-      // SUCCESS: Redirect to the dashboard (main page)
-      router.push('/');
-    } else {
-      // FAILURE: Show error
-      setError("Invalid email or password. Try admin@edugenie.com / admin");
+      if (authError) throw authError;
+
+      // 2. Save user info in cookies for quick sidebar display
+      const user = data.user;
+      const name = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User';
+      const userEmail = user?.email || email;
+      document.cookie = `ai_user_name=${encodeURIComponent(name)}; path=/; max-age=2592000`;
+      document.cookie = `ai_user_email=${encodeURIComponent(userEmail)}; path=/; max-age=2592000`;
+
+      // 3. Success: Redirect to dashboard
+      // Note: The session is also stored by Supabase
+      router.push('/'); 
+      
+    } catch (err: any) {
+      setError(err.message || "Invalid login credentials.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -41,15 +56,10 @@ export default function LoginPage() {
 
         {/* ERROR MESSAGE DISPLAY */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl animate-pulse text-center">
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl text-center">
             {error}
           </div>
         )}
-
-        <button className="w-full flex items-center justify-center gap-3 border-2 border-slate-100 py-3 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition mb-6">
-          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAA7VBMVEVHcEz/RkL/R0D+SEr/RUD/RkOwjlb/SD7/SE3/SUj/Vzb/VDf9TFb8TVeHoFb/YTD/byn8TVn/jRr/fSL/mxL/SEj+yQn/ohH/tQv+VUb/vQn/wwn+zgj9wQm3xQ39zgT6zQYwhv/7zgowhv8uhv0ek+Avhv7yzAPjywIvhv0whv7PyQHUygIth/y3yAEnivSlxwGSxgUak94fj+h5xAlgwxMLqp8NnsQVlte6xwBNwh45wC0xwDMLt28IrJgJpa0kjPCaxQEpvzsevkkWvVANumQQu18JtXkIsIgTvVYOvGALuWtJwh4OvF8OvF9ccfxCAAAAT3RSTlMAUZvT7P8T//+wiv//kAv6/mD//+V2jv//JKf//0EmxOr/rP7+MEX//x10/6eu//3+/9v///7I//+K//+KS/3/YeX//7dsnv7/////5s3tMAqBMAAAAXFJREFUeAF0jUUCwCAMwDp3d/f9/4krnVt6goQCFzheECVJFHgOPpB5RZHYIKqqyU+vGwpCXkVM07pp2zEQ8hSYiCBf1rsuFrQCvaSahHe+9wMqWHJuOD2E/lYoWsRxkUbBxcdJshY6bEQ3L6fpWmTnXXbxkBcpJTb8UBZFgUX156uyLLHI4Y+YgqL+DZqS0R7n7o4NLQX9GQwbI5tugpKI7wF5Rjd/BiNCCQZfX5BfCwyWrsnagGEYiKKpMkLqgJmZmXn/caKTzGoM7+v4IEiWPQdJ4fMhFujHCzjH7Wny6xFwMB9UKBa4KN3Tl4kh9AZYVJRbpXhVVRGX0asEXNP1a7MM0wQJA+0WFcQtyz7bcFzPAwn+8AkPwmjDcZK6WJGR75zwsCirOo7rpu0SojC2oQUeIF72/TCMY4sUKSj2wX9iXgAHwYgEoKBPizOBgx4EhwnCtxOtDnYTzn1Gnw3wzYQT3zDJrpmXYVjmpj7d/gPknlJE6eZSewAAAABJRU5ErkJggg==" width="20" alt="Google" />
-          Sign in with Google
-        </button>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="relative">
@@ -58,7 +68,7 @@ export default function LoginPage() {
               type="email" 
               placeholder="Email Address" 
               value={email}
-              onChange={(e) => setEmail(e.target.value)} // Capture email
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none text-slate-900 font-medium transition"
               required
             />
@@ -69,7 +79,7 @@ export default function LoginPage() {
               type="password" 
               placeholder="Password" 
               value={password}
-              onChange={(e) => setPassword(e.target.value)} // Capture password
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none text-slate-900 font-medium transition"
               required
             />
@@ -77,8 +87,13 @@ export default function LoginPage() {
           <div className="text-right">
             <a href="#" className="text-xs font-bold text-blue-600 hover:underline">Forgot Password?</a>
           </div>
-          <button type="submit" className="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl transition active:scale-[0.98]">
-            Login
+          
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl transition active:scale-[0.98] flex justify-center items-center gap-2"
+          >
+            {loading ? <Loader2 className="animate-spin" /> : "Login"}
           </button>
         </form>
 
