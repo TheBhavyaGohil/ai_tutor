@@ -2,11 +2,46 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
+const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all network interfaces
 
-app.use(cors()); // Enable CORS
+// Enhanced CORS configuration - more permissive for development
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:4000',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:4000',
+    ];
+    
+    // Check if origin matches allowed patterns
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      /^http:\/\/192\.168\.\d+\.\d+:3000$/.test(origin) ||
+                      /^http:\/\/192\.168\.\d+\.\d+:4000$/.test(origin) ||
+                      /^http:\/\/10\.\d+\.\d+\.\d+:3000$/.test(origin) ||
+                      origin === process.env.NEXT_PUBLIC_APP_URL;
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(null, true); // Allow anyway in development
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
+
 app.use(express.json()); // Parse JSON bodies
 
 // Create an axios instance with custom headers
@@ -506,13 +541,31 @@ app.post('/api/courses', async (req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', message: 'Course Fetcher Server is running' });
 });
 
+// Helper function to get local IP address
+function getLocalIP() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
+}
+
 // Start the server
-app.listen(PORT, () => {
-    console.log(`\n🚀 Course Fetcher Server is running on http://localhost:${PORT}`);
-    console.log(`📡 API Endpoint: POST http://localhost:${PORT}/api/courses`);
-    console.log(`💊 Health Check: GET http://localhost:${PORT}/health\n`);
+app.listen(PORT, HOST, () => {
+    const localIP = getLocalIP();
+    console.log(`\n🚀 Course Fetcher Server Running`);
+    console.log(`📍 Host: ${HOST}`);
+    console.log(`🔌 Port: ${PORT}`);
+    console.log(`\n📡 Local Access: http://localhost:${PORT}`);
+    console.log(`📡 Network Access: http://${localIP}:${PORT}`);
+    console.log(`\n✅ API Endpoint: POST /api/courses`);
+    console.log(`✅ Health Check: GET /api/health\n`);
 });

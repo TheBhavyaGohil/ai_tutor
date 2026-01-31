@@ -33,8 +33,10 @@ export default function CourseContent() {
     setHasSearched(true);
 
     try {
-      // Call the course-fetcher server
-      const response = await fetch('http://localhost:4000/api/courses', {
+      console.log('Fetching courses via proxy for:', searchQuery.trim());
+      
+      // Use Next.js API proxy to avoid browser extension blocks and CORS issues
+      const response = await fetch('/api/proxy-courses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -42,15 +44,22 @@ export default function CourseContent() {
         body: JSON.stringify({ topic: searchQuery.trim() }),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to search courses');
       }
 
       const data = await response.json();
+      console.log('Courses received:', Array.isArray(data) ? data.length : 0);
       setCourses(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while searching');
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while searching';
+      console.error('Course search error:', errorMessage);
+      console.error('Full error:', err);
+      setError(errorMessage);
       setCourses([]);
     } finally {
       setLoading(false);

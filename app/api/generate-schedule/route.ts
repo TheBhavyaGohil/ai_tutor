@@ -12,22 +12,22 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, prompt, schedule, id, name, userEmail } = body;
+    // Expect userId + accessToken for RLS
+    const { action, prompt, schedule, id, name, userId, accessToken } = body;
 
-    // --- 1. AI GENERATION ---
+    // --- 1. AI GENERATION (Unchanged) ---
     if (action === "generate") {
       const GROQ_API_KEY = process.env.GROQ_API_KEY;
       if (!GROQ_API_KEY) return NextResponse.json({ error: "Missing API Key" }, { status: 500 });
       
       const groq = new Groq({ apiKey: GROQ_API_KEY });
 
-      // STRICTER PROMPT to force valid JSON
       const systemPrompt = `
         You are a strict JSON generator. 
         Output ONLY a valid JSON Array. 
         Do not output Markdown (no \`\`\`).
         Use double quotes (") for all keys and strings. No single quotes.
-        Schema: [{ "time": "HH:MM", "activity": "string", "status": "PENDING", "day": "string (optional)" }]
+        Schema: [{ "time": "hh:mm tt/ap", "activity": "string", "status": "PENDING", "day": "string (optional)" }]
         RULES: 
         1. If request implies multiple days, include "day" field.
         2. If single day, OMIT "day".
@@ -43,8 +43,6 @@ export async function POST(req: Request) {
       });
 
       let content = completion.choices[0]?.message?.content || "";
-
-      // Cleaning logic
       content = content.replace(/```json/g, "").replace(/```/g, "");
       const jsonStart = content.indexOf('[');
       const jsonEnd = content.lastIndexOf(']');
@@ -61,15 +59,25 @@ export async function POST(req: Request) {
 
     // --- DATABASE OPERATIONS ---
     
-    // Security Gate
-    if (!userEmail) {
+    // Security Gate: Check userId + accessToken
+    if (!userId || !accessToken) {
       return NextResponse.json({ error: "Unauthorized: No user authenticated." }, { status: 401 });
     }
 
+    const supabaseAuth = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    });
+
+    // FIX: All queries now use 'user_id' instead of 'user_email'
+
     if (action === "save") {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAuth
         .from('schedules')
-        .insert([{ content: schedule, name: name, user_email: userEmail }])
+        .insert([{ content: schedule, name: name, user_id: userId }]) // Changed to user_id
         .select()
         .single();
       
@@ -78,42 +86,42 @@ export async function POST(req: Request) {
     }
 
     if (action === "load_list") {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAuth
         .from('schedules')
         .select('id, name, created_at')
-        .eq('user_email', userEmail)
+        .eq('user_id', userId) // Changed to user_id
         .order('created_at', { ascending: false });
       if (error) throw error;
       return NextResponse.json({ data });
     }
 
     if (action === "load_one") {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAuth
         .from('schedules')
         .select('*')
         .eq('id', id)
-        .eq('user_email', userEmail)
+        .eq('user_id', userId) // Changed to user_id
         .single();
       if (error) throw error;
       return NextResponse.json({ data });
     }
 
     if (action === "update") {
-      const { error } = await supabase
+      const { error } = await supabaseAuth
         .from('schedules')
         .update({ content: schedule, name: name })
         .eq('id', id)
-        .eq('user_email', userEmail);
+        .eq('user_id', userId); // Changed to user_id
       if (error) throw error;
       return NextResponse.json({ success: true });
     }
 
     if (action === "delete") {
-      const { error } = await supabase
+      const { error } = await supabaseAuth
         .from('schedules')
         .delete()
         .eq('id', id)
-        .eq('user_email', userEmail);
+        .eq('user_id', userId); // Changed to user_id
       if (error) throw error;
       return NextResponse.json({ success: true });
     }

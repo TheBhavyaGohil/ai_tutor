@@ -1,6 +1,7 @@
 "use client";
+
 import React, { useState, useEffect, useRef } from "react";
-import { Printer, Calendar, CheckCircle2, Circle, Clock3, ChevronDown } from "lucide-react";
+import { Printer, Calendar, ChevronDown } from "lucide-react";
 
 interface ScheduleItem {
   time: string;
@@ -76,7 +77,6 @@ export default function DynamicTimetable({ schedule, onStatusChange }: DynamicTi
                   </td>
 
                   <td className="px-6 py-3 text-center align-top pt-3 print:text-left">
-                    {/* Interactive Status Selector */}
                     <StatusSelector 
                       status={item.status} 
                       onChange={(newStatus) => onStatusChange && onStatusChange(idx, newStatus)} 

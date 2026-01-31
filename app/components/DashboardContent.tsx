@@ -92,8 +92,9 @@ export default function DashboardContent({ user, onViewSchedule }: { user: any, 
           if (schedule.content && Array.isArray(schedule.content)) {
             schedule.content.forEach((task: any) => {
               totalTasks++;
-              if (task.status === 'PENDING') totalPending++;
-              if (task.status === 'COMPLETED') totalCompleted++;
+              const status = String(task.status || '').trim().toUpperCase();
+              if (status === 'PENDING') totalPending++;
+              if (status === 'COMPLETED' || status === 'DONE') totalCompleted++;
             });
             
             activities.push({
@@ -134,7 +135,7 @@ export default function DashboardContent({ user, onViewSchedule }: { user: any, 
 
         // Sort & Slice Activity
         activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setRecentActivity(activities.slice(0, 5));
+        setRecentActivity(activities.slice(0, 2));
 
         const latestSchedule = safeSchedules[0];
         const completionRate = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
@@ -164,7 +165,7 @@ export default function DashboardContent({ user, onViewSchedule }: { user: any, 
           quizzesCompleted: quizResults?.length || 0
         });
 
-        setRecentSchedules(safeSchedules.slice(0, 3));
+        setRecentSchedules(safeSchedules.slice(0, 2));
 
       } catch (err: any) {
         console.error("Dashboard logic error:", err.message);
