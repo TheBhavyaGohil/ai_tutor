@@ -6,7 +6,10 @@ export async function POST(req: Request) {
     const { prompt } = await req.json();
     
     // 1. Setup API (Use 2.5-flash for speed and reliability)
-    const apiKey = "AIzaSyAeN5Nji44Ekxi0DTKxVWxpkizBSy5c0g4";
+    const apiKey = process.env.GENERATIVE_API_KEY || "";
+    if (!apiKey) {
+      return NextResponse.json({ error: "Missing GENERATIVE_API_KEY in environment" }, { status: 500 });
+    }
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash",
