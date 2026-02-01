@@ -1,10 +1,18 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+function getSupabaseAdmin() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    return null;
+  }
+
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+}
 
 interface UdemyCourse {
   id: string;
@@ -144,15 +152,20 @@ export async function POST(request: NextRequest) {
 
     // Try to check database for cached results
     try {
-      const { data: existingCourses, error: dbError } = await supabaseAdmin
-        .from('courses')
-        .select('*')
-        .ilike('search_query', `%${normalizedQuery}%`)
-        .limit(12);
+      const supabaseAdmin = getSupabaseAdmin();
+      if (supabaseAdmin) {
+        const { data: existingCourses, error: dbError } = await supabaseAdmin
+          .from('courses')
+          .select('*')
+          .ilike('search_query', `%${normalizedQuery}%`)
+          .limit(12);
 
-      if (!dbError && existingCourses && existingCourses.length > 0) {
-        console.log(`💾 Found ${existingCourses.length} cached courses in database`);
-        return NextResponse.json(existingCourses);
+        if (!dbError && existingCourses && existingCourses.length > 0) {
+          console.log(`💾 Found ${existingCourses.length} cached courses in database`);
+          return NextResponse.json(existingCourses);
+        }
+      } else {
+        console.log('⚠️  Supabase env missing, skipping cache lookup');
       }
     } catch (dbError) {
       console.log('⚠️  Database not available, will fetch fresh courses');
@@ -167,25 +180,30 @@ export async function POST(request: NextRequest) {
 
     // Try to cache in database (non-critical)
     try {
-      const coursesToInsert = realCourses.map((course) => ({
-        id: `udemy_${course.id}`,
-        title: course.title,
-        description: course.description,
-        price: course.price,
-        rating: course.rating,
-        course_url: course.courseUrl,
-        image: course.image,
-        platform: course.platform,
-        search_query: normalizedQuery,
-        created_at: new Date().toISOString(),
-      }));
+      const supabaseAdmin = getSupabaseAdmin();
+      if (supabaseAdmin) {
+        const coursesToInsert = realCourses.map((course) => ({
+          id: `udemy_${course.id}`,
+          title: course.title,
+          description: course.description,
+          price: course.price,
+          rating: course.rating,
+          course_url: course.courseUrl,
+          image: course.image,
+          platform: course.platform,
+          search_query: normalizedQuery,
+          created_at: new Date().toISOString(),
+        }));
 
-      const { error: insertError } = await supabaseAdmin
-        .from('courses')
-        .insert(coursesToInsert);
+        const { error: insertError } = await supabaseAdmin
+          .from('courses')
+          .insert(coursesToInsert);
 
-      if (!insertError) {
-        console.log(`💾 Cached ${realCourses.length} courses in database`);
+        if (!insertError) {
+          console.log(`💾 Cached ${realCourses.length} courses in database`);
+        }
+      } else {
+        console.log('⚠️  Supabase env missing, skipping cache insert');
       }
     } catch (cacheError) {
       console.log('⚠️  Could not cache courses (database unavailable)');
