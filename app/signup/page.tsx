@@ -87,6 +87,11 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      // Check if Supabase is properly configured
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        throw new Error("Supabase is not properly configured. Please check your environment variables.");
+      }
+
       // Sign up with Supabase
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -100,6 +105,7 @@ export default function SignupPage() {
       });
 
       if (signUpError) {
+        console.error("Supabase signup error:", signUpError);
         if (signUpError.message.includes('rate limit') || signUpError.message.includes('Email rate limit exceeded')) {
           setError("Too many signup attempts. Please try again in a few minutes or use a different email address.");
           return;
@@ -112,13 +118,23 @@ export default function SignupPage() {
         setStep(2); // Move to skills selection
       }
     } catch (err: any) {
-      console.error("Signup error:", err);
-      const errorMessage = err.message || "Failed to create account";
+      console.error("Signup error details:", {
+        message: err.message,
+        status: err.status,
+        name: err.name,
+        stack: err.stack
+      });
       
-      if (errorMessage.includes('already registered')) {
+      let errorMessage = err.message || "Failed to create account";
+      
+      if (errorMessage.includes('Failed to fetch')) {
+        setError("Network error. Please check your internet connection and try again.");
+      } else if (errorMessage.includes('already registered') || errorMessage.includes('already exists')) {
         setError("This email is already registered. Please sign in instead.");
       } else if (errorMessage.includes('invalid email')) {
         setError("Please enter a valid email address.");
+      } else if (errorMessage.includes('Supabase is not properly configured')) {
+        setError("Service is unavailable. Please contact support.");
       } else {
         setError(errorMessage);
       }
@@ -210,7 +226,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 p-4">
+    <div className="h-screen w-full flex flex-col items-center bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 p-4 py-10 overflow-y-auto">
       {step === 1 ? (
         /* STEP 1: Account Information */
         <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-slate-200">
@@ -348,7 +364,7 @@ export default function SignupPage() {
               </div>
             )}
 
-            <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="space-y-8 pr-2">
               {skillCategories.map((category) => (
                 <div key={category.category}>
                   <div className="flex items-center gap-3 mb-4">
