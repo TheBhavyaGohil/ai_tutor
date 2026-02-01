@@ -129,13 +129,13 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen, view, setView
           {/* Action Buttons Row */}
           <div className="flex gap-2">
             {/* Theme Toggle */}
-            <button 
+            {/*<button 
               onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
               className="flex-1 flex items-center justify-center p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
               title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
             >
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-            </button>
+            </button>*/}
 
             {/* Logout */}
             <button 
