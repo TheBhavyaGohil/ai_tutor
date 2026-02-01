@@ -110,11 +110,11 @@ This powers the proxy endpoint used by course search.
 
 ## 10) Screenshots (add manually)
 - **Landing / Dashboard**: ![Project Screenshot](./images/Dashboard_page.png)
-- **Ai Tutor**: ![Project Screenshot](./images/Ai-tutor_page.png)
+- **Ai Tutor**: ![Project Screenshot](./images/Ai-Tutor_page.png)
 - **Course finder**: ![Project Screenshot](./images/Course_page.png)
 - **Schedule Generator**: ![Project Screenshot](./images/Schedule_page.png)
 - **Pomodoro**: ![Project Screenshot](./images/Pomodoro_page.png)
-- **PDF Tutor**: ![Project Screenshot](./images/Pdf-tutor_page.png)
+- **PDF Tutor**: ![Project Screenshot](./images/PDF-tutor_page.png)
 - **Quiz Generator**: ![Project Screenshot](./images/Quiz_page.png)
 - **Skill Page**: ![Project Screenshot](./images/Skill_page.png)
 
