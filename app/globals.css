@@ -24,3 +24,187 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* --- PROFESSIONAL PRINT STYLING --- */
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm; /* Large physical margins for professional look */
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-root {
+    width: 100%;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #1e293b;
+    position: relative;
+  }
+
+  /* --- HEADER --- */
+  .print-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #0f172a;
+  }
+
+  .print-title {
+    font-size: 24pt;
+    font-weight: 900;
+    color: #0f172a;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 0;
+  }
+
+  .print-subtitle {
+    font-size: 10pt;
+    color: #64748b;
+    margin-top: 0.5rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* --- TABLE --- */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+
+  .print-table thead {
+    display: table-header-group; /* Repeats header on new pages */
+  }
+  
+  /* Prevent rows from splitting in half */
+  .print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-table th {
+    background-color: #f1f5f9 !important;
+    color: #334155;
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 8pt;
+    letter-spacing: 0.5px;
+    padding: 12px 10px;
+    border-bottom: 2px solid #cbd5e1;
+    text-align: left;
+  }
+
+  .print-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+
+  .print-table tbody tr:nth-child(even) {
+    background-color: #f8fafc !important;
+  }
+
+  /* Content Styling */
+  .print-day {
+    font-weight: 800;
+    color: #334155;
+    font-size: 9pt;
+  }
+
+  .print-time {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    color: #475569;
+    white-space: nowrap;
+    font-size: 9pt;
+  }
+
+  .print-activity-title {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 4px;
+  }
+
+  .print-activity-desc {
+    font-size: 9pt;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  /* Status Badges */
+  .print-status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 7pt;
+    font-weight: 800;
+    text-transform: uppercase;
+    text-align: center;
+    min-width: 60px;
+    border: 1px solid transparent;
+  }
+
+  .print-status-done {
+    background-color: #dcfce7 !important;
+    color: #166534 !important;
+    border-color: #bbf7d0 !important;
+  }
+
+  .print-status-pending {
+    background-color: #fff7ed !important;
+    color: #9a3412 !important;
+    border-color: #ffedd5 !important;
+  }
+
+  .print-status-upcoming {
+    background-color: #f1f5f9 !important;
+    color: #64748b !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* --- FOOTER MAGIC --- */
+  /* 1. Define the height of the footer area */
+  .print-footer-space {
+    height: 50px;
+  }
+
+  /* 2. The spacer cell itself should be invisible */
+  .print-table-footer td {
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  /* 3. The actual fixed footer */
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 50px; /* Matches spacer height */
+    
+    /* Centering content */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    background: white; /* Hides content behind it if any */
+    border-top: none; /* REMOVED THE EXTRA LINE HERE */
+  }
+
+  .print-footer-content {
+    font-size: 9pt;
+    color: #94a3b8;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+}
