@@ -98,7 +98,7 @@ export default function DashboardPage() {
 
       {/* 2. CONTENT AREA (Flex Grow) */}
       {/* Uses flex-1 to fill remaining space */}
-      <main className="flex-1 h-full relative overflow-hidden flex flex-col transition-all duration-300">
+      <main className="flex-1 h-full relative overflow-y-auto lg:overflow-hidden flex flex-col transition-all duration-300">
         
         {/* VIEW RENDERER */}
         <div className="flex-1 h-full w-full relative">
