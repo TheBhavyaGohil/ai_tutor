@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Loader2, UserPlus, Mail, Lock, User, Code, Briefcase, Palette, Database, Globe, Brain, Cpu, Sparkles, Check, ChevronRight } from "lucide-react";
+import { Loader2, UserPlus, Mail, Lock, User, Code, Briefcase, Palette, Database, Globe, Brain, Cpu, Sparkles, Check, ChevronRight, Shield, CheckCircle } from "lucide-react";
 
 const skillCategories = [
   {
@@ -63,10 +63,82 @@ export default function SignupPage() {
     confirmPassword: ""
   });
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+
+  const handleSendOTP = async () => {
+    if (!formData.email) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    setOtpLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, purpose: 'signup' })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send OTP');
+      }
+
+      setOtpSent(true);
+      setError(""); // Clear any previous errors
+    } catch (err: any) {
+      setError(err.message || "Failed to send OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otp) {
+      setError("Please enter the OTP");
+      return;
+    }
+
+    setOtpLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch('/api/send-otp', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, otp, purpose: 'signup' })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid OTP');
+      }
+
+      setOtpVerified(true);
+      setError(""); // Clear any errors
+    } catch (err: any) {
+      setError(err.message || "Invalid OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Check if email is verified
+    if (!otpVerified) {
+      setError("Please verify your email first");
+      return;
+    }
 
     // Validation
     if (!formData.fullName || !formData.email || !formData.password) {
@@ -272,12 +344,89 @@ export default function SignupPage() {
                 <input
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, email: e.target.value });
+                    // Reset OTP states when email changes
+                    setOtpSent(false);
+                    setOtpVerified(false);
+                    setOtp("");
+
+                  }}
                   placeholder="you@example.com"
                   className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-slate-900 font-medium placeholder:text-slate-400"
-                  disabled={loading}
+                  disabled={loading || otpVerified}
                 />
+                {otpVerified && (
+                  <CheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
+                )}
               </div>
+              
+              {/* OTP Verification Section */}
+              {!otpVerified && (
+                <div className="mt-3 space-y-3">
+                  {!otpSent ? (
+                    <button
+                      type="button"
+                      onClick={handleSendOTP}
+                      disabled={otpLoading || !formData.email}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg font-semibold hover:bg-indigo-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {otpLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Sending OTP...
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="w-4 h-4" />
+                          Verify Email (Send OTP)
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="Enter 6-digit OTP"
+                          maxLength={6}
+                          className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-mono text-center tracking-widest"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleVerifyOTP}
+                          disabled={otpLoading || otp.length !== 6}
+                          className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {otpLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4" />
+                              Verify
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <button
+                          type="button"
+                          onClick={handleSendOTP}
+                          disabled={otpLoading}
+                          className="text-indigo-600 hover:text-indigo-700 font-semibold"
+                        >
+                          Resend OTP
+                        </button>
+                        <span className="text-slate-500 text-xs">
+                          Check your email for the code
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -312,7 +461,7 @@ export default function SignupPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !otpVerified}
               className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2"
             >
               {loading ? (
