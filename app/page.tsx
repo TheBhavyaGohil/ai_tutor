@@ -14,8 +14,9 @@ import PomodoroContent from './components/PomodoroContent';
 import PdfTutorContent from './components/pdf_tutorContent';
 import QuizContent from './components/QuizContent';
 import SkillsContent from './components/SkillsContent';
+import NotesLLM from './components/notesllm';
 
-type ViewType = 'dashboard' | 'tutor' | 'courses' | 'schedule' | 'pomodoro' | 'quiz' | 'pdf_tutor' | 'skills';
+type ViewType = 'dashboard' | 'tutor' | 'courses' | 'schedule' | 'pomodoro' | 'quiz' | 'pdf_tutor' | 'skills' | 'notes_llm';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -123,6 +124,7 @@ export default function DashboardPage() {
           {view === 'pdf_tutor' && <PdfTutorContent />}
           {view === 'quiz' && <QuizContent />}
           {view === 'skills' && <SkillsContent user={user} />}
+          {view === 'notes_llm' && <NotesLLM />}
           
         </div>
       </main>
