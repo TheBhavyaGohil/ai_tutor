@@ -3,12 +3,13 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
 const os = require('os');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const HOST = process.env.HOST || '0.0.0.0'; // Listen on all network interfaces
 
-// Enhanced CORS configuration - more permissive for development
+// Enhanced CORS configuration - supports both local and production environments
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -26,7 +27,10 @@ app.use(cors({
                       /^http:\/\/192\.168\.\d+\.\d+:3000$/.test(origin) ||
                       /^http:\/\/192\.168\.\d+\.\d+:4000$/.test(origin) ||
                       /^http:\/\/10\.\d+\.\d+\.\d+:3000$/.test(origin) ||
-                      origin === process.env.NEXT_PUBLIC_APP_URL;
+                      /\.netlify\.app$/.test(origin) || // Allow all Netlify domains
+                      /\.vercel\.app$/.test(origin) || // Allow all Vercel domains
+                      origin === process.env.NEXT_PUBLIC_APP_URL ||
+                      origin === process.env.FRONTEND_URL;
     
     if (isAllowed) {
       callback(null, true);
@@ -543,6 +547,121 @@ app.post('/api/courses', async (req, res) => {
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', message: 'Course Fetcher Server is running' });
+});
+
+// PDF Generation endpoint
+app.post('/generate-pdf', async (req, res) => {
+    try {
+        const { html, title } = req.body;
+        
+        console.log("PDF Generation Request for:", title);
+
+        // Validate HTML
+        if (!html || html.trim() === '' || html === '<p></p>') {
+            return res.status(400).json({ 
+                error: 'Note is empty. Please add content before exporting.' 
+            });
+        }
+
+        // Launch Puppeteer with Railway-compatible settings
+        const browser = await puppeteer.launch({
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu'
+            ],
+        });
+
+        const page = await browser.newPage();
+
+        // Construct HTML with styling
+        const fullHtml = `
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+                        body { font-family: 'Inter', sans-serif; padding: 25px; color: #334155; line-height: 1.4; max-width: 800px; margin: 0 auto; }
+                        h1 { font-size: 24px; font-weight: 800; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px; }
+                        
+                        /* TASK LIST STYLING FOR PDF */
+                        ul[data-type="taskList"] { 
+                            list-style: none; 
+                            padding: 0; 
+                            margin: 0 0 12px 0;
+                        }
+                        
+                        li[data-type="taskItem"] { 
+                            display: flex; 
+                            align-items: flex-start; 
+                            gap: 10px;
+                            margin-bottom: 8px;
+                        }
+                        
+                        li[data-type="taskItem"] label { 
+                            display: flex; 
+                            align-items: center;
+                            flex-shrink: 0;
+                            cursor: pointer;
+                            margin: 0;
+                            padding: 0;
+                        }
+                        
+                        /* Checkbox styling - simple and PDF-friendly */
+                        li[data-type="taskItem"] input[type="checkbox"] {
+                            width: 16px;
+                            height: 16px;
+                            margin: 0;
+                            padding: 0;
+                            cursor: pointer;
+                            accent-color: #4f46e5;
+                            flex-shrink: 0;
+                        }
+                        
+                        li[data-type="taskItem"] > div {
+                            flex: 1;
+                            padding: 0;
+                            margin: 0;
+                        }
+                        
+                        li[data-type="taskItem"] > div > p {
+                            margin: 0;
+                            padding: 0;
+                            line-height: 1.4;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>${title}</h1>
+                    ${html}
+                </body>
+            </html>
+        `;
+
+        await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+        
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            printBackground: true, 
+            margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' },
+        });
+
+        await browser.close();
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${title || 'note'}.pdf"`);
+        res.send(Buffer.from(pdfBuffer));
+
+    } catch (error) {
+        console.error('PDF Server Error:', error);
+        res.status(500).json({ error: 'Failed to generate PDF. Check server logs.' });
+    }
 });
 
 // Helper function to get local IP address

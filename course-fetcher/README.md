@@ -12,6 +12,39 @@ A powerful web scraping server that fetches course data from 7 major online lear
 6. **Khan Academy** - Free education for all
 7. **IBM SkillsBuild** - Free professional development
 
+## 🚂 Railway Deployment (Production)
+
+This backend is designed to run on **Railway** for production deployments, as it handles PDF generation with Puppeteer/Chrome which requires more resources than Netlify serverless functions can provide.
+
+### Required Environment Variables on Railway:
+
+```env
+RAILWAY_NIXPACKS_PROVIDERS=node,chrome
+FRONTEND_URL=https://your-netlify-app.netlify.app
+PORT=4000
+```
+
+### Deployment Steps:
+
+1. Create a new Railway project from the GitHub repo
+2. Set the environment variables above
+3. Railway will automatically run:
+   ```bash
+   npm install
+   npm run build  # Installs Chrome for Puppeteer
+   npm start
+   ```
+4. Get your Railway URL (e.g., `https://your-app.up.railway.app`)
+5. Use this URL in your Netlify frontend environment variables
+
+### New Production Endpoints:
+
+- **POST /generate-pdf** - Generate PDFs from HTML content (uses Puppeteer)
+- **POST /api/courses** - Fetch courses from multiple platforms
+- **GET /api/health** - Health check endpoint
+
+For complete deployment guide, see **NETLIFY_RAILWAY_DEPLOYMENT.md** in the root directory.
+
 ## 🔧 Installation
 
 ```bash

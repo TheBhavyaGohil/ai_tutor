@@ -280,7 +280,10 @@ export default function NotesLLM() {
     try {
       const htmlContent = editor.getHTML();
       const noteTitle = notesList.find(n => n.id === activeNoteId)?.title || "Note";
-      const response = await fetch('/api/generate-pdf', {
+      
+      // Use Railway backend for PDF generation (works on Netlify)
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+      const response = await fetch(`${backendUrl}/generate-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ html: htmlContent, title: noteTitle })
