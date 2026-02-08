@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "build": "npx puppeteer browsers install chrome && next build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["courses", "scraper", "udemy", "coursera"],
@@ -16,6 +17,7 @@
     "axios": "^1.13.4",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "puppeteer": "^23.11.1"
   }
 }
