@@ -34,10 +34,24 @@ export default function ScheduleContent() {
   const [googleChecking, setGoogleChecking] = useState(false);
   const [calendarAdding, setCalendarAdding] = useState(false);
   const [sessionAccessToken, setSessionAccessToken] = useState<string | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
 
   const showNotification = (message: string, type: NotificationType = "info") => {
     setNotification({ message, type });
   };
+
+  const getDraftKey = (uid: string) => `scheduleDraft:${uid}`;
+
+  const normalizeStatus = (value: string) => {
+    const upper = String(value || "").trim().toUpperCase();
+    return upper === "DONE" ? "DONE" : "PENDING";
+  };
+
+  const normalizeSchedule = (items: any[]) =>
+    (Array.isArray(items) ? items : []).map((item) => ({
+      ...item,
+      status: normalizeStatus(item?.status),
+    }));
 
   // 1. CHECK AUTH ON LOAD
   useEffect(() => {
@@ -66,11 +80,32 @@ export default function ScheduleContent() {
     refreshGoogleStatus(user.id, sessionAccessToken);
   }, [user?.id, sessionAccessToken]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+
+    try {
+      const draftRaw = localStorage.getItem(getDraftKey(user.id));
+      if (draftRaw) {
+        const draft = JSON.parse(draftRaw);
+        if (draft) {
+          setSchedule(normalizeSchedule(draft.schedule || []));
+          setScheduleId(draft.scheduleId ?? null);
+          setScheduleName(draft.scheduleName ?? "");
+          setPrompt(draft.prompt ?? "");
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load schedule draft", err);
+    } finally {
+      setDraftReady(true);
+    }
+  }, [user?.id]);
+
   // 2. LOGOUT FUNCTION
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
+  // const handleLogout = async () => {
+  //   await supabase.auth.signOut();
+  //   router.push("/login");
+  // };
 
   // --- API HELPER (Uses authenticated user id) ---
   const apiCall = async (payload: any) => {
@@ -105,6 +140,18 @@ export default function ScheduleContent() {
     }
   };
 
+  useEffect(() => {
+    if (!draftReady || !user?.id) return;
+    const payload = {
+      schedule,
+      scheduleId,
+      scheduleName,
+      prompt,
+      updatedAt: Date.now(),
+    };
+    localStorage.setItem(getDraftKey(user.id), JSON.stringify(payload));
+  }, [draftReady, user?.id, schedule, scheduleId, scheduleName, prompt]);
+
   // --- ACTIONS (Same logic, just connected to state) ---
 
   const generateSchedule = async () => {
@@ -113,7 +160,7 @@ export default function ScheduleContent() {
     setScheduleName("");
     setSchedule([]);
     const data = await apiCall({ action: "generate", prompt });
-    if (data?.schedule) setSchedule(data.schedule);
+    if (data?.schedule) setSchedule(normalizeSchedule(data.schedule));
   };
 
   const saveAsNew = async () => {
@@ -144,7 +191,7 @@ export default function ScheduleContent() {
   const loadSpecific = async (id: number) => {
     const res = await apiCall({ action: "load_one", id });
     if (res?.data) {
-      setSchedule(res.data.content);
+      setSchedule(normalizeSchedule(res.data.content));
       setScheduleId(res.data.id);
       setScheduleName(res.data.name);
       setIsLoadModalOpen(false);
@@ -168,7 +215,7 @@ export default function ScheduleContent() {
 
   const handleStatusChange = (index: number, newStatus: string) => {
     const updated = [...schedule];
-    updated[index].status = newStatus;
+    updated[index].status = normalizeStatus(newStatus);
     setSchedule(updated);
   };
 
@@ -386,13 +433,13 @@ export default function ScheduleContent() {
               </div>
 
               {/* Logout Button */}
-              <button 
+              {/* <button 
                 onClick={handleLogout}
                 className="flex items-center gap-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-full transition-colors"
               >
                 <LogOut className="w-4 h-4" />
                 Logout
-              </button>
+              </button> */}
             </div>
 
             {/* Controls */}

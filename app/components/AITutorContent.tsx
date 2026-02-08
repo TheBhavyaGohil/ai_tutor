@@ -24,6 +24,8 @@ export default function AITutorContent() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isContinuing, setIsContinuing] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [language, setLanguage] = useState('English');
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -463,6 +465,7 @@ export default function AITutorContent() {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
+    setHasMore(false);
 
     const reminderPromise = maybeParseReminder(userText);
     const isRemovalRequest = shouldCheckRemoveEvent(userText);
@@ -508,6 +511,7 @@ export default function AITutorContent() {
       const data = await res.json();
       const aiText = data?.text || "Sorry, I couldn't generate a response.";
       await addAssistantMessage(aiText, activeSessionId);
+      setHasMore(!!data?.hasMore);
 
       const reminderResult = await reminderPromise;
       if (reminderResult?.isReminder) {
@@ -536,6 +540,34 @@ export default function AITutorContent() {
       setMessages(prev => [...prev, { role: 'assistant', text: 'Network error: failed to reach the tutor API.' }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleContinue = async () => {
+    if (isLoading || isContinuing) return;
+
+    setIsContinuing(true);
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: '', language, continue: true, conversationHistory: messages })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        setMessages(prev => [...prev, { role: 'assistant', text: `Error: ${res.status} ${errText}` }]);
+        return;
+      }
+
+      const data = await res.json();
+      const aiText = data?.text || "Sorry, I couldn't generate a response.";
+      await addAssistantMessage(aiText, currentSessionId);
+      setHasMore(!!data?.hasMore);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Network error: failed to reach the tutor API.' }]);
+    } finally {
+      setIsContinuing(false);
     }
   };
 
@@ -795,6 +827,17 @@ export default function AITutorContent() {
                    Thinking...
                  </div>
                </div>
+            )}
+            {hasMore && !isLoading && (
+              <div className="flex justify-center">
+                <button
+                  onClick={handleContinue}
+                  disabled={isContinuing}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-full border border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                >
+                  {isContinuing ? 'Continuing...' : 'Continue'}
+                </button>
+              </div>
             )}
             <div ref={chatEndRef} />
           </div>

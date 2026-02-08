@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { 
-  BarChart, MessageSquare, Search, Calendar, Clock, FileText, LogOut, Brain, X, ChevronRight, HelpCircle, Moon, Sun, Monitor, BookOpen
+  BarChart, MessageSquare, Search, Calendar, Clock, FileText, LogOut, Brain, X, ChevronRight, HelpCircle, Moon, Sun, Monitor, BookOpen, CheckSquare
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -112,7 +112,7 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen, view, setView
           <NavItem icon={<FileText size={20} />} label="PDF Tutor" active={view === 'pdf_tutor'} onClick={() => setView('pdf_tutor')} />
           <NavItem icon={<Calendar size={20} />} label="Schedule" active={view === 'schedule'} onClick={() => setView('schedule')} />
           <NavItem icon={<Clock size={20} />} label="Pomodoro" active={view === 'pomodoro'} onClick={() => setView('pomodoro')} />
-          <NavItem icon={<HelpCircle size={20} />} label="Quiz" active={view === 'quiz'} onClick={() => setView('quiz')} />
+          <NavItem icon={<CheckSquare size={20} />} label="Quiz" active={view === 'quiz'} onClick={() => setView('quiz')} />
         </nav>
 
         {/* Footer / User Profile */}
@@ -131,13 +131,13 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen, view, setView
           {/* Action Buttons Row */}
           <div className="flex gap-2">
             {/* Theme Toggle */}
-            <button 
+            {/* <button 
               onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
               className="flex-1 flex items-center justify-center p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
               title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
             >
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-            </button>
+            </button> */}
 
             {/* Logout */}
             <button 

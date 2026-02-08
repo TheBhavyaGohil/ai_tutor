@@ -302,7 +302,9 @@ export default function NotesLLM() {
     if (!editor) return;
     try {
       const docxStyles = `<style>body { font-family: 'Arial', sans-serif; } ul[data-type="taskList"] { list-style-type: none !important; }</style>`;
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">${docxStyles}</head><body><h1>${notesList.find(n => n.id === activeNoteId)?.title || "Untitled Note"}</h1>${editor.getHTML()}</body></html>`;
+      // The one with the Title on top with h1 font.
+      // const html = `<!DOCTYPE html><html><head><meta charset="utf-8">${docxStyles}</head><body><h1>${notesList.find(n => n.id === activeNoteId)?.title || "Untitled Note"}</h1>${editor.getHTML()}</body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">${docxStyles}</head><body>${editor.getHTML()}</body></html>`;
       const blob = await asBlob(html);
       saveAs(blob as Blob, `${notesList.find(n => n.id === activeNoteId)?.title || "note"}.docx`);
     } catch (e) { alert("DOCX Export failed."); }
@@ -474,8 +476,8 @@ export default function NotesLLM() {
              </div>
 
              <div className="flex items-center gap-3">
-                <button onClick={handleDocxExport} className="p-2.5 text-slate-400 hover:text-indigo-600"><FileText size={20}/></button>
-                <button onClick={handlePdfExport} className="p-2.5 text-slate-400 hover:text-indigo-600"><Download size={20}/></button>
+                <button onClick={handleDocxExport} className="p-2.5 text-slate-400 hover:text-indigo-600"><Download size={20}/></button>
+                {/* <button onClick={handlePdfExport} className="p-2.5 text-slate-400 hover:text-indigo-600"><FileText size={20}/></button> */}
              </div>
         </div>
 

@@ -51,7 +51,7 @@ Text: ${text}`;
       model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
-      max_tokens: 400,
+      max_tokens: 800,
     });
 
     const content = completion.choices[0]?.message?.content || "";

@@ -9,13 +9,13 @@ interface ScheduleItem {
   time: string;
   activity: string;
   description?: string;
-  status: "DONE" | "PENDING" | "UPCOMING";
+  status: "DONE" | "PENDING";
   day?: string;
 }
 
 interface DynamicTimetableProps {
   schedule: ScheduleItem[];
-  onStatusChange?: (index: number, newStatus: "DONE" | "PENDING" | "UPCOMING") => void;
+  onStatusChange?: (index: number, newStatus: "DONE" | "PENDING") => void;
   onAddItemToCalendar?: (index: number) => void;
   calendarConnected?: boolean;
   calendarAdding?: boolean;
@@ -164,10 +164,9 @@ function StatusSelector({ status, onChange }: { status: string, onChange: (s: an
   const styles = {
     DONE: "bg-green-100 text-green-700 border-green-200",
     PENDING: "bg-orange-100 text-orange-700 border-orange-200",
-    UPCOMING: "bg-slate-100 text-slate-600 border-slate-200",
   };
   
-  const currentStyle = styles[status as keyof typeof styles] || styles.UPCOMING;
+  const currentStyle = styles[status as keyof typeof styles] || styles.PENDING;
 
   return (
     <div className="relative inline-block text-left print:text-right print:w-full" ref={ref}>
@@ -189,7 +188,7 @@ function StatusSelector({ status, onChange }: { status: string, onChange: (s: an
       {isOpen && (
         <div className="absolute right-0 z-10 mt-2 w-36 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none print:hidden">
           <div className="py-1">
-            {["PENDING", "DONE", "UPCOMING"].map((option) => (
+            {["PENDING", "DONE"].map((option) => (
               <button
                 key={option}
                 onClick={() => {

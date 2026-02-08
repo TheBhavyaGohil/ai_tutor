@@ -138,9 +138,9 @@ export default function CourseContent() {
                       e.currentTarget.src = 'https://via.placeholder.com/240x135?text=Course';
                     }}
                   />
-                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-slate-700 shadow-sm">
+                  {/* <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-slate-700 shadow-sm">
                     ⭐ {course.rating.toFixed(1)}
-                  </div>
+                  </div> */}
                 </div>
 
                 <div className="p-5 flex flex-col flex-1">

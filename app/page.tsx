@@ -50,6 +50,11 @@ export default function DashboardPage() {
             setView(viewParam);
             // Clean up URL
             window.history.replaceState({}, '', '/');
+          } else {
+            const storedView = localStorage.getItem('dashboardView') as ViewType | null;
+            if (storedView && ['dashboard', 'tutor', 'courses', 'schedule', 'pomodoro', 'quiz', 'pdf_tutor', 'skills', 'notes_llm'].includes(storedView)) {
+              setView(storedView);
+            }
           }
           
           // Optional: Check cookie fallback if you rely on it
@@ -71,6 +76,10 @@ export default function DashboardPage() {
 
     checkSession();
   }, [router]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboardView', view);
+  }, [view]);
 
   // --- LOGOUT HANDLER ---
   const handleLogout = async () => {
@@ -116,27 +125,37 @@ export default function DashboardPage() {
         {/* VIEW RENDERER */}
         <div className="flex-1 h-full w-full relative">
           
-          {view === 'dashboard' && (
-            <div className="h-full w-full overflow-y-auto p-4 md:p-8 custom-scrollbar">
-              <DashboardContent user={user} onViewSchedule={() => setView('schedule')} />
-            </div>
-          )}
+          <div className={view === 'dashboard' ? "h-full w-full overflow-y-auto p-4 md:p-8 custom-scrollbar" : "hidden"}>
+            <DashboardContent user={user} onViewSchedule={() => setView('schedule')} />
+          </div>
           
-          {/* These components now handle their own layout/scrolling internally */}
-          {view === 'tutor' && <AITutorContent />}
+          {/* Keep views mounted so state survives tab switches */}
+          <div className={view === 'tutor' ? "h-full w-full" : "hidden"}>
+            <AITutorContent />
+          </div>
           
-          {view === 'courses' && (
-            <div className="h-full w-full overflow-y-auto custom-scrollbar">
-              <CourseContent />
-            </div>
-          )}
+          <div className={view === 'courses' ? "h-full w-full overflow-y-auto custom-scrollbar" : "hidden"}>
+            <CourseContent />
+          </div>
           
-          {view === 'schedule' && <ScheduleContent />}
-          {view === 'pomodoro' && <PomodoroContent />}
-          {view === 'pdf_tutor' && <PdfTutorContent />}
-          {view === 'quiz' && <QuizContent />}
-          {view === 'skills' && <SkillsContent user={user} />}
-          {view === 'notes_llm' && <NotesLLM />}
+          <div className={view === 'schedule' ? "h-full w-full" : "hidden"}>
+            <ScheduleContent />
+          </div>
+          <div className={view === 'pomodoro' ? "h-full w-full" : "hidden"}>
+            <PomodoroContent />
+          </div>
+          <div className={view === 'pdf_tutor' ? "h-full w-full" : "hidden"}>
+            <PdfTutorContent />
+          </div>
+          <div className={view === 'quiz' ? "h-full w-full" : "hidden"}>
+            <QuizContent />
+          </div>
+          <div className={view === 'skills' ? "h-full w-full" : "hidden"}>
+            <SkillsContent user={user} />
+          </div>
+          <div className={view === 'notes_llm' ? "h-full w-full" : "hidden"}>
+            <NotesLLM />
+          </div>
           
         </div>
       </main>

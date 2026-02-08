@@ -4,7 +4,7 @@ interface ScheduleItem {
   time: string;
   activity: string;
   description?: string;
-  status: "DONE" | "PENDING" | "UPCOMING";
+  status: "DONE" | "PENDING";
   day?: string;
 }
 
@@ -21,10 +21,8 @@ export default function SchedulePrint({ schedule }: SchedulePrintProps) {
         return "print-status-badge print-status-done";
       case "PENDING":
         return "print-status-badge print-status-pending";
-      case "UPCOMING":
-        return "print-status-badge print-status-upcoming";
       default:
-        return "print-status-badge print-status-upcoming";
+        return "print-status-badge print-status-pending";
     }
   };
 

@@ -121,12 +121,6 @@ body {
     border: 1px solid #fdba74;
   }
 
-  .print-status-upcoming {
-    background: #e2e8f0;
-    color: #475569;
-    border: 1px solid #cbd5e1;
-  }
-
   .print-activity-title {
     font-weight: bold;
     color: #0f172a;

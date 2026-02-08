@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: prompt }
       ],
       temperature: 0.5, // Lower temperature for more structured output
-      max_tokens: 2000,
+      max_tokens: 4000,
       stream: true, 
     });
 

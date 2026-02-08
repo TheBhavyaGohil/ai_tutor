@@ -58,6 +58,9 @@ export default function SkillsContent({ user }: { user: any }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [draftReady, setDraftReady] = useState(false);
+
+  const getDraftKey = (uid: string) => `skillsDraft:${uid}`;
 
   useEffect(() => {
     const loadSkills = async () => {
@@ -76,17 +79,45 @@ export default function SkillsContent({ user }: { user: any }) {
           .eq("id", activeUser.id)
           .single();
 
-        if (data?.skills) {
-          setSkills(data.skills);
-          setSelectedSkills(data.skills);
+        const remoteSkills = Array.isArray(data?.skills) ? data.skills : [];
+        setSkills(remoteSkills);
+
+        let appliedDraft = false;
+        try {
+          const draftRaw = localStorage.getItem(getDraftKey(activeUser.id));
+          if (draftRaw) {
+            const draft = JSON.parse(draftRaw);
+            if (Array.isArray(draft?.selectedSkills)) {
+              setSelectedSkills(draft.selectedSkills);
+              setIsEditing(!!draft.isEditing);
+              appliedDraft = true;
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to load skills draft", err);
+        }
+
+        if (!appliedDraft) {
+          setSelectedSkills(remoteSkills);
         }
       } finally {
         setLoading(false);
+        setDraftReady(true);
       }
     };
 
     loadSkills();
   }, [user]);
+
+  useEffect(() => {
+    if (!draftReady || !userId) return;
+    const key = getDraftKey(userId);
+    if (isEditing) {
+      localStorage.setItem(key, JSON.stringify({ selectedSkills, isEditing: true }));
+    } else {
+      localStorage.removeItem(key);
+    }
+  }, [draftReady, userId, isEditing, selectedSkills]);
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills(prev =>
@@ -116,6 +147,9 @@ export default function SkillsContent({ user }: { user: any }) {
 
       setSkills(selectedSkills);
       setIsEditing(false);
+      if (userId) {
+        localStorage.removeItem(getDraftKey(userId));
+      }
       setSuccess("Skills updated successfully!");
       setTimeout(() => setSuccess(""), 3000);
     } catch (err: any) {
@@ -129,6 +163,9 @@ export default function SkillsContent({ user }: { user: any }) {
     setSelectedSkills(skills);
     setIsEditing(false);
     setError("");
+    if (userId) {
+      localStorage.removeItem(getDraftKey(userId));
+    }
   };
 
   return (

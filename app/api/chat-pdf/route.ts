@@ -7,13 +7,28 @@ const groq = new Groq({
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, files, conversationHistory } = await request.json();
+    const { message, files, conversationHistory, continue: continueRequest } = await request.json();
+
+    const approxCharsPerToken = 4;
+    const maxOutputTokens = 2000;
+    const maxInputTokens = 7000;
+    const maxInputChars = maxInputTokens * approxCharsPerToken;
+    const maxChunks = 2;
+    const continueMarker = '[[CONTINUE]]';
+    let needsMore = false;
+
+    const trimText = (text: string, maxChars: number) =>
+      text.length > maxChars ? text.slice(0, Math.max(0, maxChars - 3)) + '...' : text;
+    const stripContinue = (text: string) =>
+      text.replace(new RegExp(`${continueMarker}\\s*$`, 'i'), '').trimEnd();
 
     // Handle multiple files
     const fileNames = files.map((f: any) => f.name).join(', ');
+    const perFileBudget = Math.floor((maxInputChars * 0.55) / Math.max(1, files.length));
     const combinedContent = files
       .map((f: any, idx: number) => {
-        return `\n\n=== DOCUMENT ${idx + 1}: ${f.name} ===\n${f.content.substring(0, 15000 / files.length)}`;
+        const content = typeof f.content === 'string' ? f.content : '';
+        return `\n\n=== DOCUMENT ${idx + 1}: ${f.name} ===\n${trimText(content, perFileBudget)}`;
       })
       .join('\n');
 
@@ -44,25 +59,39 @@ IMPORTANT FORMATTING INSTRUCTIONS:
       { role: 'system', content: systemPrompt }
     ];
 
-    // Add conversation history (last 10 messages to avoid token limits)
-    const recentHistory = conversationHistory.slice(-10);
+    // Add conversation history (limit to reduce input tokens)
+    const recentHistory = Array.isArray(conversationHistory) ? conversationHistory.slice(-6) : [];
     messages.push(...recentHistory);
 
     // Add current message
-    messages.push({ role: 'user', content: message });
+    const safeMessage = typeof message === 'string' ? trimText(message, Math.floor(maxInputChars * 0.1)) : '';
+    if (continueRequest) {
+      messages.push({
+        role: 'user',
+        content: 'Continue from your last response without repeating. Finish any incomplete code or lists.'
+      });
+    } else {
+      messages.push({ role: 'user', content: safeMessage });
+    }
 
-    // Call Groq API
-    const chatCompletion = await groq.chat.completions.create({
-      messages: messages,
-      model: 'llama-3.3-70b-versatile', // Fast and capable model
-      temperature: 0.7,
-      max_tokens: 1024,
-      top_p: 1,
-      stream: false
-    });
+    const callGroq = async (activeMessages: any[]) => {
+      const chatCompletion = await groq.chat.completions.create({
+        messages: activeMessages,
+        model: 'llama-3.3-70b-versatile', // Fast and capable model
+        temperature: 0.7,
+        max_tokens: maxOutputTokens,
+        top_p: 1,
+        stream: false
+      });
+      return {
+        text: chatCompletion.choices[0]?.message?.content || '',
+        finishReason: chatCompletion.choices[0]?.finish_reason || ''
+      };
+    };
 
-    // 1. Extract the actual text string from the Groq response structure
-    const rawText = chatCompletion.choices[0]?.message?.content;
+    let combinedText = '';
+    let result = await callGroq(messages);
+    let rawText = result.text;
 
     if (!rawText) {
       return NextResponse.json(
@@ -71,8 +100,26 @@ IMPORTANT FORMATTING INSTRUCTIONS:
       );
     }
 
+    let chunkCount = 1;
+    needsMore = rawText.trimEnd().endsWith(continueMarker) || result.finishReason === 'length';
+    while (needsMore && chunkCount < maxChunks) {
+      combinedText += stripContinue(rawText) + '\n\n';
+      messages.push({ role: 'assistant', content: stripContinue(rawText) });
+      messages.push({ role: 'user', content: 'continue' });
+      result = await callGroq(messages);
+      rawText = result.text;
+      chunkCount += 1;
+      if (!rawText) {
+        break;
+      }
+      needsMore = rawText.trimEnd().endsWith(continueMarker) || result.finishReason === 'length';
+    }
+
+    combinedText += stripContinue(rawText);
+
     // Return the response with markdown formatting intact
-    return NextResponse.json({ response: rawText });
+      const hasMore = needsMore && chunkCount >= maxChunks;
+      return NextResponse.json({ response: combinedText.trim(), hasMore });
   } catch (error: any) {
     console.error('Error in chat-pdf API:', error);
     return NextResponse.json(
