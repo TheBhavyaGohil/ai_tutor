@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation"; // For redirection
 import DynamicTimetable from "./DynamicTimetable";
-import { Sparkles, Loader2, Save, DownloadCloud, Search, X, FileText, RefreshCw, Trash2, User, LogOut } from "lucide-react";
+import { Sparkles, Loader2, Save, DownloadCloud, Search, X, FileText, RefreshCw, Trash2, User, LogOut, CalendarPlus, CalendarCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import NotificationOverlay, { NotificationType } from "./NotificationOverlay";
 
@@ -29,6 +29,12 @@ export default function ScheduleContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [notification, setNotification] = useState<{ message: string; type: NotificationType } | null>(null);
 
+  // --- GOOGLE CALENDAR STATE ---
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleChecking, setGoogleChecking] = useState(false);
+  const [calendarAdding, setCalendarAdding] = useState(false);
+  const [sessionAccessToken, setSessionAccessToken] = useState<string | null>(null);
+
   const showNotification = (message: string, type: NotificationType = "info") => {
     setNotification({ message, type });
   };
@@ -42,6 +48,7 @@ export default function ScheduleContent() {
           router.push("/login"); // Redirect if not logged in
         } else {
           setUser(session.user);
+          setSessionAccessToken(session.access_token || null);
         }
       } catch (error) {
         console.error("Auth check failed", error);
@@ -53,6 +60,11 @@ export default function ScheduleContent() {
 
     checkUser();
   }, [router]);
+
+  useEffect(() => {
+    if (!user?.id || !sessionAccessToken) return;
+    refreshGoogleStatus(user.id, sessionAccessToken);
+  }, [user?.id, sessionAccessToken]);
 
   // 2. LOGOUT FUNCTION
   const handleLogout = async () => {
@@ -160,6 +172,186 @@ export default function ScheduleContent() {
     setSchedule(updated);
   };
 
+  const refreshGoogleStatus = async (userId: string, accessToken: string) => {
+    setGoogleChecking(true);
+    try {
+      const res = await fetch("/api/google/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, accessToken }),
+      });
+      const data = await res.json();
+      if (res.ok) setGoogleConnected(!!data.connected);
+    } catch (error) {
+      console.warn("Failed to check Google status", error);
+    } finally {
+      setGoogleChecking(false);
+    }
+  };
+
+  const connectGoogleCalendar = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch("/api/google/oauth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, nextPath: "/", currentView: "schedule" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start Google OAuth");
+      window.location.href = data.url;
+    } catch (err: any) {
+      showNotification(err.message || "Google OAuth failed", "error");
+    }
+  };
+
+  const parseSingleTime = (value: string) => {
+    const match = value.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+    if (!match) return null;
+    let hour = Number(match[1]);
+    const minute = Number(match[2] || 0);
+    const meridiem = match[3]?.toLowerCase();
+
+    if (meridiem) {
+      if (hour === 12) hour = meridiem === "am" ? 0 : 12;
+      else if (meridiem === "pm") hour += 12;
+    }
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return hour * 60 + minute;
+  };
+
+  const parseTimeRange = (value: string) => {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    const parts = normalized.split(/-|–|to/i).map((part) => part.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+
+    const startMinutes = parseSingleTime(parts[0]);
+    if (startMinutes === null) return null;
+
+    const endMinutes = parts[1] ? parseSingleTime(parts[1]) : null;
+    return {
+      startMinutes,
+      endMinutes: endMinutes ?? startMinutes + 60,
+    };
+  };
+
+  const getNextDateForDay = (day?: string) => {
+    const today = new Date();
+    if (!day) return today;
+    const lookup: Record<string, number> = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+
+    const normalized = day.trim().toLowerCase();
+    const target = lookup[normalized];
+    if (target === undefined) return today;
+
+    const diff = (target - today.getDay() + 7) % 7;
+    const next = new Date(today);
+    next.setDate(today.getDate() + diff);
+    return next;
+  };
+
+  const buildCalendarEvents = () => {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return schedule
+      .filter((item) => String(item.status || "").toUpperCase() !== "DONE")
+      .map((item) => {
+        const timeRange = parseTimeRange(item.time || "");
+        if (!timeRange) return null;
+
+        const baseDate = getNextDateForDay(item.day);
+        const start = new Date(baseDate);
+        start.setHours(0, 0, 0, 0);
+        start.setMinutes(timeRange.startMinutes);
+
+        const end = new Date(baseDate);
+        end.setHours(0, 0, 0, 0);
+        end.setMinutes(timeRange.endMinutes);
+
+        return {
+          summary: item.activity || "Schedule item",
+          description: item.description || "",
+          start: start.toISOString(),
+          end: end.toISOString(),
+          timeZone,
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const addItemToCalendar = async (index: number) => {
+    if (!user?.id || !sessionAccessToken) {
+      showNotification("Please sign in again to connect Google Calendar.", "error");
+      return;
+    }
+
+    if (!googleConnected) {
+      await connectGoogleCalendar();
+      return;
+    }
+
+    const item = schedule[index];
+    if (!item) return;
+
+    // Skip DONE items
+    if (String(item.status || "").toUpperCase() === "DONE") {
+      showNotification("Cannot add completed items to calendar.", "info");
+      return;
+    }
+
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timeRange = parseTimeRange(item.time || "");
+    if (!timeRange) {
+      showNotification("Cannot parse time for this item.", "error");
+      return;
+    }
+
+    const baseDate = getNextDateForDay(item.day);
+    const start = new Date(baseDate);
+    start.setHours(0, 0, 0, 0);
+    start.setMinutes(timeRange.startMinutes);
+
+    const end = new Date(baseDate);
+    end.setHours(0, 0, 0, 0);
+    end.setMinutes(timeRange.endMinutes);
+
+    const event = {
+      summary: item.activity || "Schedule item",
+      description: item.description || "",
+      start: start.toISOString(),
+      end: end.toISOString(),
+      timeZone,
+    };
+
+    setCalendarAdding(true);
+    try {
+      const res = await fetch("/api/google/add-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          accessToken: sessionAccessToken,
+          event,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add event");
+      showNotification("Event added to Google Calendar.", "success");
+    } catch (error: any) {
+      showNotification(error.message || "Failed to add event.", "error");
+    } finally {
+      setCalendarAdding(false);
+    }
+  };
+
   // 3. LOADING SCREEN (While checking auth)
   if (isAuthChecking) {
     return (
@@ -252,7 +444,14 @@ export default function ScheduleContent() {
             </div>
 
             {/* Timetable View */}
-            <DynamicTimetable schedule={schedule} onStatusChange={handleStatusChange} />
+            <DynamicTimetable
+              schedule={schedule}
+              onStatusChange={handleStatusChange}
+              onAddItemToCalendar={addItemToCalendar}
+              calendarConnected={googleConnected}
+              calendarAdding={calendarAdding}
+              connectGoogleCalendar={connectGoogleCalendar}
+            />
           </div>
         </div>
 

@@ -157,6 +157,29 @@ CREATE POLICY "Users can insert own quiz results" ON public.quiz_results FOR INS
 CREATE POLICY "Users can delete own quiz results" ON public.quiz_results FOR DELETE USING (auth.uid() = user_id);
 
 -- ============================================
+-- 7. GOOGLE CALENDAR TOKENS TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.google_calendar_tokens (
+    user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    access_token text,
+    refresh_token text NOT NULL,
+    scope text,
+    token_type text,
+    expiry_date timestamptz,
+    created_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at timestamptz DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_google_calendar_tokens_user_id ON public.google_calendar_tokens(user_id);
+
+ALTER TABLE public.google_calendar_tokens ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own google tokens" ON public.google_calendar_tokens FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own google tokens" ON public.google_calendar_tokens FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own google tokens" ON public.google_calendar_tokens FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own google tokens" ON public.google_calendar_tokens FOR DELETE USING (auth.uid() = user_id);
+
+-- ============================================
 -- AUTO UPDATE TIMESTAMP TRIGGER
 -- ============================================
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -170,6 +193,7 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 CREATE TRIGGER update_pdfs_updated_at BEFORE UPDATE ON public.pdfs FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 CREATE TRIGGER update_chat_sessions_updated_at BEFORE UPDATE ON public.chat_sessions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+CREATE TRIGGER update_google_calendar_tokens_updated_at BEFORE UPDATE ON public.google_calendar_tokens FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ============================================
 -- USEFUL QUERIES (EXAMPLES)

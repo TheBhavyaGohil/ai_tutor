@@ -40,6 +40,18 @@ export default function DashboardPage() {
           // Session exists? Load user
           setUser(session.user);
           
+          // Check if returning from Google OAuth
+          const params = new URLSearchParams(window.location.search);
+          const viewParam = params.get('view') as ViewType;
+          const googleStatus = params.get('google');
+          
+          // Only change view if OAuth was successful
+          if (googleStatus === 'connected' && viewParam && ['dashboard', 'tutor', 'courses', 'schedule', 'pomodoro', 'quiz', 'pdf_tutor', 'skills', 'notes_llm'].includes(viewParam)) {
+            setView(viewParam);
+            // Clean up URL
+            window.history.replaceState({}, '', '/');
+          }
+          
           // Optional: Check cookie fallback if you rely on it
           if (typeof document !== 'undefined') {
              const cookieCheck = document.cookie.includes('ai_user_email');
