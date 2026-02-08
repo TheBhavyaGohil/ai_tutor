@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { 
-  BarChart, MessageSquare, Search, Calendar, Clock, FileText, LogOut, Brain, X, ChevronRight, Award, Moon, Sun, Monitor, BookOpen
+  BarChart, MessageSquare, Search, Calendar, Clock, FileText, LogOut, Brain, X, ChevronRight, HelpCircle, Moon, Sun, Monitor, BookOpen
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -112,7 +112,7 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen, view, setView
           <NavItem icon={<FileText size={20} />} label="PDF Tutor" active={view === 'pdf_tutor'} onClick={() => setView('pdf_tutor')} />
           <NavItem icon={<Calendar size={20} />} label="Schedule" active={view === 'schedule'} onClick={() => setView('schedule')} />
           <NavItem icon={<Clock size={20} />} label="Pomodoro" active={view === 'pomodoro'} onClick={() => setView('pomodoro')} />
-          <NavItem icon={<Award size={20} />} label="Quiz" active={view === 'quiz'} onClick={() => setView('quiz')} />
+          <NavItem icon={<HelpCircle size={20} />} label="Quiz" active={view === 'quiz'} onClick={() => setView('quiz')} />
         </nav>
 
         {/* Footer / User Profile */}
