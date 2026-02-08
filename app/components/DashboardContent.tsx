@@ -140,17 +140,37 @@ export default function DashboardContent({ user, onViewSchedule }: { user: any, 
         const latestSchedule = safeSchedules[0];
         const completionRate = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
         
-        // Calculate Streak
+        // Calculate Streak - Fixed logic for consecutive days
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to midnight for accurate date comparison
         let streak = 0;
+        
+        // Check if there's activity today first - streak must include today
         for (let i = 0; i < 30; i++) {
           const checkDate = new Date(today);
           checkDate.setDate(today.getDate() - i);
-          const hasActivity = safeSchedules.some(s => 
-            new Date(s.created_at).toDateString() === checkDate.toDateString()
-          );
-          if (hasActivity) streak++;
-          else if (i > 0) break;
+          
+          // Check for ANY activity on this date (schedules, quizzes, etc.)
+          const hasScheduleActivity = safeSchedules.some(s => {
+            const scheduleDate = new Date(s.created_at);
+            scheduleDate.setHours(0, 0, 0, 0);
+            return scheduleDate.getTime() === checkDate.getTime();
+          });
+          
+          const hasQuizActivity = quizResults?.some(q => {
+            const quizDate = new Date(q.created_at);
+            quizDate.setHours(0, 0, 0, 0);
+            return quizDate.getTime() === checkDate.getTime();
+          }) || false;
+          
+          const hasActivity = hasScheduleActivity || hasQuizActivity;
+          
+          if (hasActivity) {
+            streak++;
+          } else {
+            // Break immediately when we hit a day without activity
+            break;
+          }
         }
         
         setStats({
