@@ -3,6 +3,45 @@ import { Groq } from "groq-sdk";
 
 export const runtime = "nodejs";
 
+// Helper function to convert 12-hour time format to 24-hour format
+function convertTo24Hour(timeStr: string): string | null {
+  try {
+    // Match patterns like: "2pm", "2 PM", "2:30 PM", "2:30pm", etc.
+    const match = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)/i);
+    if (!match) return null;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2] ? parseInt(match[2], 10) : 0;
+    const period = match[3].toLowerCase();
+
+    // Convert to 24-hour format
+    if (period === 'pm' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'am' && hours === 12) {
+      hours = 0;
+    }
+
+    // Format as HH:MM
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  } catch (error) {
+    console.error('Error converting time:', error);
+    return null;
+  }
+}
+
+// Helper function to get date in YYYY-MM-DD format in the user's timezone
+function getLocalDate(isoString: string, offset: number = 0): string {
+  const date = new Date(isoString);
+  if (offset !== 0) {
+    date.setDate(date.getDate() + offset);
+  }
+  // Get date components in the user's local time (already in their timezone from isoString)
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export async function POST(req: Request) {
   try {
     const { text, timeZone, nowIso } = await req.json();
@@ -18,9 +57,9 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
-    // Extract today's date from the provided ISO string
-    const todayDate = new Date(nowIso).toISOString().slice(0, 10); // e.g., "2026-02-10"
-    const tomorrowDate = new Date(new Date(nowIso).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // Extract today's date and tomorrow's date using the user's local timezone
+    const todayDate = getLocalDate(nowIso, 0); // e.g., "2026-02-10"
+    const tomorrowDate = getLocalDate(nowIso, 1);
 
     const prompt = `You are a reminder parser. Return ONLY ONE JSON object (no markdown, no explanations, no code blocks, no multiple objects).
 
@@ -127,6 +166,23 @@ Remember: Your response must be ONLY a single JSON object. Nothing else. Use the
       return NextResponse.json({ error: "Failed to parse reminder response" }, { status: 500 });
     }
 
+    // Validate and fix time format if needed
+    if (parsed.isReminder && parsed.time) {
+      // If the time looks wrong (like "01:50" for an afternoon time), try to extract the real time from the input text
+      const timeMatch = text.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)/i) || 
+                        text.match(/(\d{1,2})\s*(am|pm|AM|PM)/i);
+      
+      if (timeMatch) {
+        const extractedTime = timeMatch[0];
+        const convertedTime = convertTo24Hour(extractedTime);
+        if (convertedTime) {
+          console.log(`Correcting time from LLM "${parsed.time}" to extracted "${convertedTime}"`);
+          parsed.time = convertedTime;
+        }
+      }
+    }
+
+    console.log("Final parsed reminder:", parsed);
     return NextResponse.json(parsed);
   } catch (error: any) {
     console.error("Reminder Parse Error:", error);

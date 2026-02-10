@@ -336,13 +336,22 @@ export default function AITutorContent() {
     const timePart = reminderToAdd.time || '09:00';
     const durationMinutes = reminderToAdd.durationMinutes || 60;
 
-    const start = new Date(`${datePart}T${timePart}:00`);
-    const end = new Date(start.getTime() + durationMinutes * 60000);
+    // Parse the time and add duration to calculate end time
+    const [hours, minutes] = timePart.split(':').map(Number);
+    const startMinutes = hours * 60 + minutes;
+    const endMinutes = startMinutes + durationMinutes;
+    const endHours = Math.floor(endMinutes / 60) % 24;
+    const endMins = endMinutes % 60;
+    const endTimePart = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
+    
+    // Check if end time goes to next day
+    const endDatePart = endMinutes >= 1440 
+      ? new Date(new Date(datePart).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      : datePart;
 
-    // Format datetime without Z suffix and without milliseconds
-    // Google Calendar API requires: YYYY-MM-DDTHH:MM:SS (no Z, no milliseconds)
-    const startISOLocal = start.toISOString().replace('Z', '').split('.')[0];
-    const endISOLocal = end.toISOString().replace('Z', '').split('.')[0];
+    // Format as YYYY-MM-DDTHH:MM:SS in local timezone (no conversion to UTC)
+    const startISOLocal = `${datePart}T${timePart}:00`;
+    const endISOLocal = `${endDatePart}T${endTimePart}:00`;
 
     console.log('Adding reminder to calendar:', { title: reminderToAdd.title, date: datePart, time: timePart, formattedStart: startISOLocal, formattedEnd: endISOLocal });
 
