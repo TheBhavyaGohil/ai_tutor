@@ -332,7 +332,12 @@ export default function AITutorContent() {
     }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const datePart = reminderToAdd.date || new Date().toISOString().slice(0, 10);
+    
+    // Get current date in local timezone without UTC conversion
+    const now = new Date();
+    const localDateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    
+    const datePart = reminderToAdd.date || localDateString;
     const timePart = reminderToAdd.time || '09:00';
     const durationMinutes = reminderToAdd.durationMinutes || 60;
 
@@ -344,10 +349,13 @@ export default function AITutorContent() {
     const endMins = endMinutes % 60;
     const endTimePart = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
     
-    // Check if end time goes to next day
-    const endDatePart = endMinutes >= 1440 
-      ? new Date(new Date(datePart).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-      : datePart;
+    // Check if end time goes to next day (using string manipulation to avoid timezone issues)
+    let endDatePart = datePart;
+    if (endMinutes >= 1440) {
+      const [year, month, day] = datePart.split('-').map(Number);
+      const nextDay = new Date(year, month - 1, day + 1);
+      endDatePart = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
+    }
 
     // Format as YYYY-MM-DDTHH:MM:SS in local timezone (no conversion to UTC)
     const startISOLocal = `${datePart}T${timePart}:00`;
@@ -994,7 +1002,7 @@ export default function AITutorContent() {
                       <>
                         {googleConnected ? (
                           <button
-                            onClick={handleAddReminderToCalendar}
+                            onClick={() => handleAddReminderToCalendar()}
                             disabled={pendingReminderLoading}
                             className="px-4 py-2 text-sm font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 shadow-md"
                           >
