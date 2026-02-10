@@ -26,7 +26,15 @@ export async function POST(req: Request) {
     }
 
     if (!event?.summary || !event?.start || !event?.end || !event?.timeZone) {
-      return NextResponse.json({ error: "Missing event details" }, { status: 400 });
+      const missingFields = [];
+      if (!event?.summary) missingFields.push('summary');
+      if (!event?.start) missingFields.push('start');
+      if (!event?.end) missingFields.push('end');
+      if (!event?.timeZone) missingFields.push('timeZone');
+      
+      const errorMsg = `Missing event details: ${missingFields.join(', ')}`;
+      console.error(errorMsg, { event });
+      return NextResponse.json({ error: errorMsg }, { status: 400 });
     }
 
     const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
@@ -54,6 +62,7 @@ export async function POST(req: Request) {
       .single();
 
     if (tokenError || !tokenRow?.refresh_token) {
+      console.error("Failed to get refresh token:", tokenError);
       return NextResponse.json({ error: "Google Calendar not connected" }, { status: 400 });
     }
 
@@ -62,25 +71,100 @@ export async function POST(req: Request) {
 
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
+    // Normalize timezone (some deprecated names need to be mapped)
+    let timeZone = event.timeZone;
+    const timeZoneMap: { [key: string]: string } = {
+      'Asia/Calcutta': 'Asia/Kolkata',
+    };
+    if (timeZoneMap[timeZone]) {
+      console.log(`Normalizing timezone from ${timeZone} to ${timeZoneMap[timeZone]}`);
+      timeZone = timeZoneMap[timeZone];
+    }
+
+    // Get UTC offset for the timezone and date
+    // For Asia/Kolkata, the offset is always +05:30
+    const getTimezoneOffset = (tz: string): string => {
+      if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta') return '+05:30';
+      // Add more timezone offsets as needed
+      return '+00:00';
+    };
+
+    const offset = getTimezoneOffset(timeZone);
+
+    console.log("Creating calendar event with details:", {
+      summary: event.summary,
+      start: event.start,
+      end: event.end,
+      timeZone: timeZone,
+      offset: offset
+    });
+
+    // Validate datetime format
+    const dateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+    if (!dateTimeRegex.test(event.start) || !dateTimeRegex.test(event.end)) {
+      console.error("Invalid datetime format:", { 
+        start: event.start, 
+        startValid: dateTimeRegex.test(event.start),
+        end: event.end,
+        endValid: dateTimeRegex.test(event.end)
+      });
+      return NextResponse.json({ error: "Invalid datetime format. Expected YYYY-MM-DDTHH:MM:SS" }, { status: 400 });
+    }
+
+    // Add timezone offset to datetime strings
+    const startWithOffset = `${event.start}${offset}`;
+    const endWithOffset = `${event.end}${offset}`;
+
+    console.log("Event with offset:", { start: startWithOffset, end: endWithOffset });
+
     const response = await calendar.events.insert({
       calendarId: "primary",
       requestBody: {
         summary: event.summary,
         description: event.description || "",
         start: {
-          dateTime: event.start,
-          timeZone: event.timeZone,
+          dateTime: startWithOffset,
         },
         end: {
-          dateTime: event.end,
-          timeZone: event.timeZone,
+          dateTime: endWithOffset,
+        },
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'popup', minutes: 1 },
+          ],
         },
       },
     });
 
+    console.log("Event created successfully:", response.data);
+
+    if (!response.data.id) {
+      return NextResponse.json({ error: "Event created but no ID returned" }, { status: 500 });
+    }
+
     return NextResponse.json({ success: true, eventId: response.data.id });
   } catch (error: any) {
-    console.error("Google Add Event Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to add event" }, { status: 500 });
+    console.error("Google Add Event Error:", {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      errors: error.errors,
+      fullError: JSON.stringify(error, null, 2),
+    });
+    
+    // Try to extract more details from the error
+    if (error.errors && Array.isArray(error.errors)) {
+      console.error("Detailed errors:", error.errors.map((e: any) => ({
+        domain: e.domain,
+        reason: e.reason,
+        message: e.message,
+      })));
+    }
+    
+    return NextResponse.json({ 
+      error: error.message || "Failed to add event",
+      details: error.errors?.map((e: any) => e.message).join(', ') || ''
+    }, { status: 500 });
   }
 }

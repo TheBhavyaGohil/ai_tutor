@@ -18,12 +18,18 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
-    const prompt = `You are a reminder parser. Return ONLY a valid JSON object (no markdown, no explanations, no code blocks).
+    // Extract today's date from the provided ISO string
+    const todayDate = new Date(nowIso).toISOString().slice(0, 10); // e.g., "2026-02-10"
+    const tomorrowDate = new Date(new Date(nowIso).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-RESPONSE MUST BE VALID JSON ONLY. Example valid response:
-{"isReminder": true, "title": "Meeting", "date": "2024-02-10", "time": "14:30", "durationMinutes": 30, "description": null}
+    const prompt = `You are a reminder parser. Return ONLY ONE JSON object (no markdown, no explanations, no code blocks, no multiple objects).
 
-Schema:
+RESPONSE MUST BE A SINGLE JSON OBJECT EXACTLY LIKE THIS:
+{"isReminder": true, "title": "Meeting", "date": "${todayDate}", "time": "14:30", "durationMinutes": 30, "description": null}
+
+DO NOT return multiple JSON objects. DO NOT return JSON array. Return EXACTLY ONE object only.
+
+Schema for the single JSON object you must return:
 {
   "isReminder": boolean,
   "title": string or null,
@@ -36,22 +42,40 @@ Schema:
 Rules:
 - If the text contains reminder/alarm/schedule intent (e.g., "remind me", "set reminder", "@", "alarm"), set isReminder=true. Otherwise isReminder=false
 - Extract the reminder title/context (what to remind about) - be concise but clear
-- Parse time formats: @10:45, 10:45, at 10:45, etc. Convert to 24-hour HH:MM format
+- **TIME CONVERSION (CRITICAL):**
+  - 12-hour format: "3pm" = "15:00", "3 PM" = "15:00", "3:45 PM" = "15:45"
+  - 12-hour format: "2am" = "02:00", "2 AM" = "02:00", "2:30 AM" = "02:30"
+  - 12-hour format: "12pm" (noon) = "12:00", "12am" (midnight) = "00:00"
+  - Parse time formats: @10:45, 10:45, at 10:45, 3pm, 3:00 PM, 2 PM, 2PM, etc. Always convert to 24-hour HH:MM format
 - Resolve relative dates like "tomorrow", "today" using the provided current date
-- If date is not mentioned and isReminder is true, use today's date
+- If date is not mentioned and isReminder is true, use today's date: ${todayDate}
 - Default duration to 30 minutes if not specified and isReminder is true
 - Use the provided timezone when interpreting time phrases
 - Return null for fields that are not applicable
+- ONLY return ONE JSON object, never multiple
+- **CRITICAL: Always use the current date ${todayDate} for "today", not any other date**
+- **CRITICAL: For PM times, add 12 to the hour. For "2 PM" return "14:00", for "3:45 PM" return "15:45"**
+- **CRITICAL: For AM times, keep as-is but pad with zero. For "2 AM" return "02:00", for "9 AM" return "09:00"**
 
-Examples:
-- "Remind me @ 10:45 for visiting bike broker" → {"isReminder": true, "title": "Visiting bike broker", "date": "2024-02-10", "time": "10:45", "durationMinutes": 30, "description": null}
-- "Set alarm at 3pm for meeting" → {"isReminder": true, "title": "Meeting", "date": "2024-02-10", "time": "15:00", "durationMinutes": 30, "description": null}
-- "Remind me tomorrow at 9am for lab" → {"isReminder": true, "title": "Lab", "date": "2024-02-11", "time": "09:00", "durationMinutes": 30, "description": null}
-- "Hello there" → {"isReminder": false, "title": null, "date": null, "time": null, "durationMinutes": null, "description": null}
+Examples (each shows exactly one JSON object response):
+- Input: "Remind me @ 10:45 for visiting bike broker" 
+  Output: {"isReminder": true, "title": "Visiting bike broker", "date": "${todayDate}", "time": "10:45", "durationMinutes": 30, "description": null}
+- Input: "Set alarm at 3pm for meeting" 
+  Output: {"isReminder": true, "title": "Meeting", "date": "${todayDate}", "time": "15:00", "durationMinutes": 30, "description": null}
+- Input: "remind me at 2 PM for testing"
+  Output: {"isReminder": true, "title": "Testing", "date": "${todayDate}", "time": "14:00", "durationMinutes": 30, "description": null}
+- Input: "Remind me tomorrow at 9am for lab"
+  Output: {"isReminder": true, "title": "Lab", "date": "${tomorrowDate}", "time": "09:00", "durationMinutes": 30, "description": null}
+- Input: "Hello there" 
+  Output: {"isReminder": false, "title": null, "date": null, "time": null, "durationMinutes": null, "description": null}
 
 Current time (ISO): ${nowIso}
+Today's date: ${todayDate}
+Tomorrow's date: ${tomorrowDate}
 Timezone: ${timeZone}
-User text: ${text}`;
+User text: ${text}
+
+Remember: Your response must be ONLY a single JSON object. Nothing else. Use the dates provided above (${todayDate} for today).`;
 
     const completion = await groq.chat.completions.create({
       model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
@@ -62,10 +86,28 @@ User text: ${text}`;
 
     const content = completion.choices[0]?.message?.content || "";
     const jsonStart = content.indexOf("{");
-    const jsonEnd = content.lastIndexOf("}");
 
-    if (jsonStart === -1 || jsonEnd === -1) {
+    if (jsonStart === -1) {
       return NextResponse.json({ error: "Invalid parser response" }, { status: 500 });
+    }
+
+    // Extract only the first JSON object
+    let braceCount = 0;
+    let jsonEnd = -1;
+    
+    for (let i = jsonStart; i < content.length; i++) {
+      if (content[i] === "{") braceCount++;
+      if (content[i] === "}") {
+        braceCount--;
+        if (braceCount === 0) {
+          jsonEnd = i;
+          break;
+        }
+      }
+    }
+
+    if (jsonEnd === -1) {
+      return NextResponse.json({ error: "Invalid parser response - malformed JSON" }, { status: 500 });
     }
 
     let jsonStr = content.substring(jsonStart, jsonEnd + 1);

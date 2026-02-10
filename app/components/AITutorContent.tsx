@@ -189,6 +189,15 @@ export default function AITutorContent() {
            /(remove|delete|clear|cancel).*(all|every).*(event|events)?/i.test(text);
   };
 
+  const shouldListEvents = (text: string) => {
+    // Exclude add/set/create messages - those are for reminders, not listing
+    const isAddMessage = /(add|set|create|schedule|new).*(event|reminder|alarm)/i.test(text);
+    if (isAddMessage) return false;
+    
+    const pattern = /(list|show|view|display|what are|whats|any).*(event|events|schedule|appointment).*(today|calendar)?|(event|events|schedule|appointment).*(today|now).*(list|show|display)|(today|todays).*(event|events|schedule|appointment).*(?!add|set|create)/i;
+    return pattern.test(text);
+  };
+
   const formatDateString = (year: number, month: number, day: number): string => {
     const yyyy = year.toString();
     const mm = month.toString().padStart(2, '0');
@@ -303,49 +312,77 @@ export default function AITutorContent() {
     }
   };
 
-  const handleAddReminderToCalendar = async () => {
-    if (!pendingReminder) return;
+  const handleAddReminderToCalendar = async (reminder?: ReminderState) => {
+    const reminderToAdd = reminder || pendingReminder;
+    if (!reminderToAdd) {
+      console.warn('No reminder to add');
+      return;
+    }
     
     if (!sessionAccessToken) {
       console.warn('No session token available');
+      await addAssistantMessage('Google Calendar session expired. Please reconnect.', currentSessionId);
       return;
     }
 
     if (!googleConnected) {
+      console.warn('Google Calendar not connected');
       await connectGoogleCalendar();
       return;
     }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const datePart = pendingReminder.date || new Date().toISOString().slice(0, 10);
-    const timePart = pendingReminder.time || '09:00';
-    const durationMinutes = pendingReminder.durationMinutes || 60;
+    const datePart = reminderToAdd.date || new Date().toISOString().slice(0, 10);
+    const timePart = reminderToAdd.time || '09:00';
+    const durationMinutes = reminderToAdd.durationMinutes || 60;
 
     const start = new Date(`${datePart}T${timePart}:00`);
     const end = new Date(start.getTime() + durationMinutes * 60000);
 
+    // Format datetime without Z suffix and without milliseconds
+    // Google Calendar API requires: YYYY-MM-DDTHH:MM:SS (no Z, no milliseconds)
+    const startISOLocal = start.toISOString().replace('Z', '').split('.')[0];
+    const endISOLocal = end.toISOString().replace('Z', '').split('.')[0];
+
+    console.log('Adding reminder to calendar:', { title: reminderToAdd.title, date: datePart, time: timePart, formattedStart: startISOLocal, formattedEnd: endISOLocal });
+
     try {
       setReminderAdding(true);
+      const eventPayload = {
+        userId,
+        accessToken: sessionAccessToken,
+        event: {
+          summary: reminderToAdd.title || 'Reminder',
+          description: reminderToAdd.description || '',
+          start: startISOLocal,
+          end: endISOLocal,
+          timeZone
+        }
+      };
+      
+      console.log('Sending reminder to API:', eventPayload);
+      
       const res = await fetch('/api/google/add-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          accessToken: sessionAccessToken,
-          event: {
-            summary: pendingReminder.title || 'Reminder',
-            description: pendingReminder.description || '',
-            start: start.toISOString(),
-            end: end.toISOString(),
-            timeZone
-          }
-        })
+        body: JSON.stringify(eventPayload)
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to add event');
       
-      const title = pendingReminder.title || 'reminder';
+      const data = await res.json();
+      console.log('Add event response:', { status: res.status, data });
+      
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to add event (${res.status})`);
+      }
+      
+      if (!data.success || !data.eventId) {
+        throw new Error(data.error || 'Event added but no event ID received');
+      }
+      
+      const title = reminderToAdd.title || 'reminder';
       const eventId = data.eventId;
+      
+      console.log('Reminder added successfully:', eventId);
       
       // Store eventId in state for deletion
       setPendingReminder(prev => prev ? { ...prev, eventId } : null);
@@ -357,7 +394,7 @@ export default function AITutorContent() {
         setPendingReminder(null);
       }, 3000);
     } catch (error: any) {
-      console.error('Failed to add reminder', error);
+      console.error('Failed to add reminder to calendar:', error);
       await addAssistantMessage(`❌ Could not add the reminder: ${error.message}. Please try again.`, currentSessionId);
     } finally {
       setReminderAdding(false);
@@ -422,6 +459,46 @@ export default function AITutorContent() {
     }
   };
 
+  const handleListEventsForDate = async (date: string = new Date().toISOString().slice(0, 10)) => {
+    if (!sessionAccessToken) {
+      await addAssistantMessage('Please connect your Google Calendar to view your events.', currentSessionId);
+      return;
+    }
+
+    if (!googleConnected) {
+      await connectGoogleCalendar();
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/google/list-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          accessToken: sessionAccessToken,
+          date
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch events');
+      
+      if (data.count === 0) {
+        await addAssistantMessage(`📅 You have no events on ${new Date(date).toLocaleDateString()}.`, currentSessionId);
+      } else {
+        let eventsList = `📅 Calendar Events for ${new Date(date).toLocaleDateString()}:\n\n`;
+        data.events.forEach((event: any) => {
+          const startTime = event.startTime ? new Date(event.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'All day';
+          eventsList += `• **${event.title}** - ${startTime}\n`;
+        });
+        await addAssistantMessage(eventsList, currentSessionId);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch events', error);
+      await addAssistantMessage(`❌ Could not fetch events: ${error.message}.`, currentSessionId);
+    }
+  };
+
   // --- ACTION HANDLERS ---
   const createNewChat = async () => {
     // Reset selection if active
@@ -470,6 +547,8 @@ export default function AITutorContent() {
     const reminderPromise = maybeParseReminder(userText);
     const isRemovalRequest = shouldCheckRemoveEvent(userText);
     const removalDate = isRemovalRequest ? parseRemovalDate(userText) : null;
+    const isListRequest = shouldListEvents(userText);
+    const listDate = isListRequest ? parseRemovalDate(userText) : null;
 
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
@@ -519,10 +598,10 @@ export default function AITutorContent() {
         setPendingReminder(reminderResult);
         
         if (googleConnected && sessionAccessToken) {
-          // Auto-add if already connected
+          // Auto-add if already connected - pass reminder data directly to avoid race condition
           setTimeout(async () => {
-            await handleAddReminderToCalendar();
-          }, 500);
+            await handleAddReminderToCalendar(reminderResult);
+          }, 100);
         } else {
           await addAssistantMessage(`Please connect your Google Calendar to set this reminder.`, activeSessionId);
         }
@@ -535,6 +614,17 @@ export default function AITutorContent() {
         setTimeout(async () => {
           await handleRemoveAllEventsForDate(removalDate);
         }, 500);
+      }
+
+      // Handle event list requests
+      if (isListRequest && listDate) {
+        if (!googleConnected) {
+          await addAssistantMessage('Please connect your Google Calendar to view your events.', activeSessionId);
+        } else if (sessionAccessToken) {
+          setTimeout(async () => {
+            await handleListEventsForDate(listDate);
+          }, 500);
+        }
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', text: 'Network error: failed to reach the tutor API.' }]);
