@@ -18,34 +18,40 @@ export async function POST(req: Request) {
 
     const groq = new Groq({ apiKey });
 
-    const prompt = `You are a reminder parser. Return ONLY valid JSON (no markdown).
+    const prompt = `You are a reminder parser. Return ONLY a valid JSON object (no markdown, no explanations, no code blocks).
+
+RESPONSE MUST BE VALID JSON ONLY. Example valid response:
+{"isReminder": true, "title": "Meeting", "date": "2024-02-10", "time": "14:30", "durationMinutes": 30, "description": null}
+
 Schema:
 {
   "isReminder": boolean,
-  "title": string | null,
-  "date": "YYYY-MM-DD" | null,
-  "time": "HH:MM" | null,
-  "durationMinutes": number | null,
-  "description": string | null
+  "title": string or null,
+  "date": "YYYY-MM-DD" or null,
+  "time": "HH:MM" or null,
+  "durationMinutes": number or null,
+  "description": string or null
 }
 
 Rules:
-- If the text contains reminder/alarm/schedule intent (e.g., "remind me", "set reminder", "@", "alarm"), set isReminder=true
+- If the text contains reminder/alarm/schedule intent (e.g., "remind me", "set reminder", "@", "alarm"), set isReminder=true. Otherwise isReminder=false
 - Extract the reminder title/context (what to remind about) - be concise but clear
 - Parse time formats: @10:45, 10:45, at 10:45, etc. Convert to 24-hour HH:MM format
 - Resolve relative dates like "tomorrow", "today" using the provided current date
-- If date is not mentioned, use today's date
-- Default duration to 30 minutes if not specified
+- If date is not mentioned and isReminder is true, use today's date
+- Default duration to 30 minutes if not specified and isReminder is true
 - Use the provided timezone when interpreting time phrases
+- Return null for fields that are not applicable
 
 Examples:
-- "Remind me @ 10:45 for visiting bike broker" → title: "Visiting bike broker", time: "10:45", date: today
-- "Set alarm at 3pm for meeting" → title: "Meeting", time: "15:00", date: today
-- "Remind me tomorrow at 9am for lab" → title: "Lab", time: "09:00", date: tomorrow
+- "Remind me @ 10:45 for visiting bike broker" → {"isReminder": true, "title": "Visiting bike broker", "date": "2024-02-10", "time": "10:45", "durationMinutes": 30, "description": null}
+- "Set alarm at 3pm for meeting" → {"isReminder": true, "title": "Meeting", "date": "2024-02-10", "time": "15:00", "durationMinutes": 30, "description": null}
+- "Remind me tomorrow at 9am for lab" → {"isReminder": true, "title": "Lab", "date": "2024-02-11", "time": "09:00", "durationMinutes": 30, "description": null}
+- "Hello there" → {"isReminder": false, "title": null, "date": null, "time": null, "durationMinutes": null, "description": null}
 
 Current time (ISO): ${nowIso}
 Timezone: ${timeZone}
-Text: ${text}`;
+User text: ${text}`;
 
     const completion = await groq.chat.completions.create({
       model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
@@ -62,8 +68,22 @@ Text: ${text}`;
       return NextResponse.json({ error: "Invalid parser response" }, { status: 500 });
     }
 
-    const jsonStr = content.substring(jsonStart, jsonEnd + 1);
-    const parsed = JSON.parse(jsonStr);
+    let jsonStr = content.substring(jsonStart, jsonEnd + 1);
+    
+    // Clean up common JSON artifacts
+    jsonStr = jsonStr
+      .replace(/,\s*}/, "}") // Remove trailing commas before closing brace
+      .replace(/,\s*]/, "]") // Remove trailing commas before closing bracket
+      .trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error("Failed to parse JSON. Raw content:", content);
+      console.error("Extracted JSON:", jsonStr);
+      return NextResponse.json({ error: "Failed to parse reminder response" }, { status: 500 });
+    }
 
     return NextResponse.json(parsed);
   } catch (error: any) {
